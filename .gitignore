@@ -1,0 +1,33 @@
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# Python cache & bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Logs & temporary runtimes
+*.log
+uvicorn.log
+
+# Uploaded/Processed user data (keep repository lightweight)
+*.csv
+*.tsv
+*.parquet
+!data/sample/*.csv

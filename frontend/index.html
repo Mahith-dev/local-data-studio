@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Local Data Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-8 font-sans select-none">
+<div class="max-w-4xl mx-auto">
+
+    <!-- Header -->
+    <header class="mb-8 border-b border-slate-800 pb-4 flex justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold tracking-tight text-emerald-400">On-Device Data Studio</h1>
+            <p class="text-sm text-slate-400">Private, local dataset diagnostics & modeling</p>
+        </div>
+        <span class="text-xs bg-slate-900 border border-slate-700 text-slate-300 px-3 py-1 rounded-full">Local Engine</span>
+    </header>
+
+    <!-- Upload Card -->
+    <section
+            id="drop-area"
+            class="border-2 border-dashed border-slate-800 hover:border-emerald-500 rounded-xl p-10 text-center transition cursor-pointer bg-slate-900/50"
+    >
+        <input type="file" id="file-input" class="hidden" multiple accept=".csv,.tsv,.txt,.names">
+        <div class="space-y-2 pointer-events-none">
+            <p class="text-base font-medium">Click to select or drag and drop datasets</p>
+            <p class="text-xs text-slate-500">Supports single or multiple .csv files (e.g. red + white wine) & .names</p>
+        </div>
+    </section>
+
+    <!-- Status & Info Messages -->
+    <div id="status-badges" class="mt-4 flex flex-wrap gap-2 hidden"></div>
+
+    <!-- Results Section -->
+    <section id="results" class="mt-8 hidden space-y-4">
+        <h2 class="text-lg font-semibold text-slate-200">Dataset Diagnostics</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-lg">
+                <p class="text-xs text-slate-500 uppercase tracking-wide">Total Rows</p>
+                <p id="stat-rows" class="text-2xl font-bold mt-1 text-slate-100">-</p>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-lg">
+                <p class="text-xs text-slate-500 uppercase tracking-wide">Features</p>
+                <p id="stat-cols" class="text-2xl font-bold mt-1 text-slate-100">-</p>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-lg">
+                <p class="text-xs text-slate-500 uppercase tracking-wide">Missing Values</p>
+                <p id="stat-missing" class="text-2xl font-bold mt-1 text-amber-400">-</p>
+            </div>
+            <div class="bg-slate-900 border border-slate-800 p-4 rounded-lg">
+                <p class="text-xs text-slate-500 uppercase tracking-wide">Numeric Features</p>
+                <p id="stat-numeric" class="text-2xl font-bold mt-1 text-emerald-400">-</p>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<script>
+    const fileInput = document.getElementById('file-input');
+    const dropArea = document.getElementById('drop-area');
+    const statusBadges = document.getElementById('status-badges');
+
+    // 1. PREVENT WINDOW/BROWSER FROM OPENING THE DROPPED FILE
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        window.addEventListener(eventName, preventDefaults, false);
+        document.body.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    // 2. HIGHLIGHT DROP AREA ON HOVER
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, () => {
+            dropArea.classList.add('border-emerald-500', 'bg-slate-900/90');
+        }, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, () => {
+            dropArea.classList.remove('border-emerald-500', 'bg-slate-900/90');
+        }, false);
+    });
+
+    // 3. TRIGGER CLICK SELECTION
+    dropArea.addEventListener('click', () => fileInput.click());
+
+    // 4. HANDLE DROP AND FILE SELECTION
+    dropArea.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) uploadFiles(files);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length > 0) uploadFiles(e.target.files);
+    });
+
+    // 5. SEND FILES TO FASTAPI
+    async function uploadFiles(files) {
+        const formData = new FormData();
+        for (let i = 0; i < files.length; i++) {
+            formData.append('files', files[i]);
+        }
+
+        try {
+            const response = await fetch('http://127.0.0.1:8000/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+            if (data.error) {
+                alert(data.error);
+                return;
+            }
+
+            // Update stats
+            document.getElementById('stat-rows').innerText = data.rows.toLocaleString();
+            document.getElementById('stat-cols').innerText = data.columns;
+            document.getElementById('stat-missing').innerText = data.missing_cells.toLocaleString();
+            document.getElementById('stat-numeric').innerText = data.numerical_columns.length;
+
+            // Render file badges & merge notes
+            statusBadges.innerHTML = '';
+            data.files_loaded.forEach(fn => {
+                statusBadges.innerHTML += `<span class="bg-emerald-950/70 border border-emerald-800 text-emerald-300 text-xs px-2.5 py-1 rounded-md">✓ ${fn}</span>`;
+            });
+            data.notes.forEach(note => {
+                statusBadges.innerHTML += `<span class="bg-slate-900 border border-slate-700 text-slate-400 text-xs px-2.5 py-1 rounded-md">ℹ ${note}</span>`;
+            });
+
+            statusBadges.classList.remove('hidden');
+            document.getElementById('results').classList.remove('hidden');
+        } catch (err) {
+            alert("Failed to connect to local Python engine. Make sure run.py is active.");
+        }
+    }
+</script>
+</body>
+</html>
